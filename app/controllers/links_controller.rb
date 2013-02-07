@@ -3,15 +3,11 @@ class LinksController < ApplicationController
   before_filter :authenticate_user!, :except => [:index, :show]
 
   def index
-    @links = Link.find(:all, 
-                       :joins => 'LEFT JOIN votes on votes.link_id = links.id',
-                       :group => 'links.id, links.url, links.title, links.created_at, links.updated_at, links.user_id, links.short_url',
-                       :order => 'SUM(COALESCE(votes.score, 0)) DESC')
+    @links = Link.all
+    @user = current_user
 
     respond_to do |format|
       format.html # index.html.erb
-      format.xml { render :xml => @links }
-      format.json { render :json => @links }
     end
   end
 
@@ -38,7 +34,7 @@ class LinksController < ApplicationController
 
     respond_to do |format|
       if @link.save!
-        format.html { redirect_to(links_index_url, flash[:notice] => 'Link was successfully added.') }
+        format.html { redirect_to links_index_url, :flash => { :success => "Succesfully added #{@link.title}!" } }
       else
         format.html { render :action => "new" }
       end
@@ -56,41 +52,28 @@ class LinksController < ApplicationController
     render :action => 'index'
   end
 
-  def upvote
+  def vote_up
+    @user = current_user
     @link = Link.find(params[:id])
-    @user = User.find(current_user.id)
-    @vote = @link.votes.create(params[:link])
-    @vote.user = @user
-    @vote.link = @link
-    @vote.score = 1
-    
-    respond_to do |format|
-      if @vote.save!
-        format.html { redirect_to(links_path, flash[:notice] => 'Your vote was added.') }
-      else
-        format.html { redirect_to(links_path, :notice => 'There was an error, please try again later.') }
-      end
-      
+
+    if @user.voted_for?(@link)
+      redirect_to links_index_url, :flash => { :notice => "You done did that." }
+    else
+      @user.vote_exclusively_for(@link)
+      redirect_to links_index_url, :flash => { :success => "Voted that bitch up." }
     end
   end
 
-  def downvote
+  def vote_down
+    @user = current_user
     @link = Link.find(params[:id])
-    @user = User.find(current_user.id)
-    @vote = @link.votes.build(params[:link])
-    @vote.user = @user
-    @vote.link = @link
-    @vote.score = -1
-        
-    respond_to do |format|
-      if @vote.save!
-        format.html { redirect_to(links_path, :notice => 'Your vote was added.') }
-      else
-        format.html { redirect_to(links_path, :notice => 'There was an error, please try again later.') }
-      end
-      
+
+    if @user.voted_for?(@link)
+      @user.vote_exclusively_against(@link)
+      redirect_to links_index_url, :flash => { :success => "Down with the man." }
+    else
+      redirect_to links_index_url, :flash => { :notice => "You done did that." }
     end
-
   end
 
-  end
+end
